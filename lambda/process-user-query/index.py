@@ -15,7 +15,11 @@ def lambda_handler(event, context):
     service_slot = get_slot_value(slots.get('Service'))
     region_slot = get_slot_value(slots.get('Region'))
 
+    service_original = service_slot.get('originalValue')
+    service_resolved = service_slot.get('resolvedValues', [])
+
     invocation_source = event.get('invocationSource')
+
     if invocation_source == 'DialogCodeHook':
         return handle_slot_validation(event)
     
@@ -33,7 +37,46 @@ def lambda_handler(event, context):
             }
         }
 
+def extract_query_with_bedrock(user_query):
+    prompt = f"""Human: Extract AWS service query information from this text: "{user_query}"
+    Return a JSON object with these fields:
+    - service: The AWS service being queried (e.g. Lambda, EC2, S3, DynamoDB, RDS)
+    - action: The action to perform (count, list, describe, status, size, invoke, metrics, logs, versions)
+    - resource: Specific resource name if mentioned (e.g. bucket name, function name)
+    - filters: Any filters mentioned (region, status, name, type, instance_type, availability_zone)
+    - limit: Any limit on results (number)
+    - payload: Any data to be passed to the resource (for invoke actions)
+
+    Only include fields that are relevent to the query.
+
+    Assistant: """
+
+    try:
+        response = bedrock_runtime.invoke_model(
+            modelId="anthropic.claude-v2",
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps({
+                "prompt": prompt,
+                "max_tokens_to_sample": 500,
+                "temperature": 0
+            })
+        )
+
+        response_body = json.loads(response.get('body').read())
+        completion = response_body.get('completion', '')
+
+        json_start = completion.find('{')
+        json_end = completion.rfind('}') + 1
+        if json_start >= 0 and json_end > json_start:
+            json_str = completion[json_start:json_end]
+            return json.loads(json_str)
+        return {}
+
 def handle_fulfillment(event):
+    user_query = event['inputTranscript']
+    response = extract_query_with_bedrock(user_query)
+    print("Response from bedrock: ", response)
     return {
         "sessionState": {
             "dialogAction": {
@@ -106,7 +149,7 @@ def handle_slot_validation(event):
 
 
     # Determine if we need to ask for Region
-    service_slot = get_slot_value(slots.get('Service'))
+    interpreted_service = get_slot_value(slots.get('Service')).get('interpretedValue')
     needs_region = service_slot in regional_services
 
     # If region is required but not provided
@@ -152,5 +195,5 @@ def handle_slot_validation(event):
 
 def get_slot_value(slot):
     if slot and isinstance(slot, dict):
-        return slot.get('value', {}).get('interpretedValue')
+        return slot.get('value', {})
     return None
