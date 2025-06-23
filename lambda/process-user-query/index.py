@@ -1,9 +1,15 @@
+import boto3
+import json
+from aws_handlers import dispatcher
+
 intent_name = None
 slots = None
 service_slot = None
 region_slot = None
 service_original = None
 service_resolved = None
+
+bedrock_runtime = boto3.client("bedrock-runtime")
 
 def lambda_handler(event, context):
     global intent_name, slots, service_slot, region_slot, service_original, service_resolved
@@ -72,11 +78,16 @@ def extract_query_with_bedrock(user_query):
             json_str = completion[json_start:json_end]
             return json.loads(json_str)
         return {}
+    except Exception as e:
+        print(e)
+        return {}
 
 def handle_fulfillment(event):
     user_query = event['inputTranscript']
     response = extract_query_with_bedrock(user_query)
     print("Response from bedrock: ", response)
+    service_handler_response = dispatcher.dispatch_service_response(response)
+    print(service_handler_response)
     return {
         "sessionState": {
             "dialogAction": {
@@ -150,7 +161,7 @@ def handle_slot_validation(event):
 
     # Determine if we need to ask for Region
     interpreted_service = get_slot_value(slots.get('Service')).get('interpretedValue')
-    needs_region = service_slot in regional_services
+    needs_region = interpreted_service in regional_services
 
     # If region is required but not provided
     if needs_region and not region_slot:
