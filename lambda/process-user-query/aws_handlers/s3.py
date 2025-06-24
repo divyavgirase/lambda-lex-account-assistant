@@ -1,4 +1,5 @@
 import boto3
+from botocore.exceptions import ClientError
 
 client = boto3.client('s3')
 
@@ -12,7 +13,7 @@ def count_s3_buckets(response):
 
 def list_s3_buckets(response):
     try:
-        buckets = s3.list_buckets()
+        buckets = client.list_buckets()
         bucket_names = [b['Name'] for b in buckets.get('Buckets', [])]
         if not bucket_names:
             return "You don't have any S3 buckets in your account."
@@ -26,7 +27,7 @@ def list_objects_in_bucket(response):
         return "Please provide a bucket name to list its objects."
 
     try:
-        objects = s3.list_objects_v2(Bucket=bucket)
+        objects = client.list_objects_v2(Bucket=bucket)
         object_list = [obj["Key"] for obj in objects.get("Contents", [])]
         if not object_list:
             return f"The bucket '{bucket}' is empty."
@@ -40,7 +41,7 @@ def get_bucket_location(response):
         return "Please specify a bucket name to find its region."
 
     try:
-        loc = s3.get_bucket_location(Bucket=bucket)
+        loc = client.get_bucket_location(Bucket=bucket)
         region = loc.get('LocationConstraint') or 'us-east-1'
         return f"The bucket '{bucket}' is located in the '{region}' region."
     except ClientError as e:
@@ -51,7 +52,7 @@ def bucket_exists(response):
     if not bucket:
         return "Please specify a bucket name to check."
     try:
-        s3.head_bucket(Bucket=bucket)
+        client.head_bucket(Bucket=bucket)
         return f"Yes, the bucket '{bucket}' exists in your account."
     except ClientError:
         return f"No, the bucket '{bucket}' does not exist or you don't have access to it."

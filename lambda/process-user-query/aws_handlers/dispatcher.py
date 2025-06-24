@@ -1,4 +1,5 @@
 import boto3
+from . import s3, ec2, lambda_service, rds
 
 def dispatch_service_response(response):
     service = response.get('service')
@@ -11,13 +12,14 @@ def dispatch_service_response(response):
         'S3': {
             'count': s3.count_s3_buckets,
             'list': s3.list_s3_buckets,
+            'list_s3_object': s3.list_objects_in_bucket,
             'exists': s3.bucket_exists,
             'locate': s3.get_bucket_location
         },
         'EC2': {
             'count': ec2.count_ec2_instances,
             'list': ec2.list_ec2_instances,
-            'exists': ec2.instance_exists
+            'exists': ec2.instance_exists,
             'describe': ec2.describe_ec2_instances
         },
         'Lambda': {

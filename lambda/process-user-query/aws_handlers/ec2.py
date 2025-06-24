@@ -92,24 +92,24 @@ def describe_ec2_instances(response):
             response = ec2_client.describe_instances()
 
 
-    instances = []
-    for reservation in response.get('Reservations', []):
-        for instance in reservation.get('Instances', []):
-            instance_id = instance.get('InstanceId')
-            instance_type = instance.get('InstanceType')
-            state = instance.get('State', {}).get('Name')
-            launch_time = instance.get('LaunchTime')
-            instances.append((instance_id, instance_type, state, launch_time))
+        instances = []
+        for reservation in response.get('Reservations', []):
+            for instance in reservation.get('Instances', []):
+                instance_id = instance.get('InstanceId')
+                instance_type = instance.get('InstanceType')
+                state = instance.get('State', {}).get('Name')
+                launch_time = instance.get('LaunchTime')
+                instances.append((instance_id, instance_type, state, launch_time))
 
-    if not instances:
-        return "No EC2 instances found for the specified criteria."
+        if not instances:
+            return "No EC2 instances found for the specified criteria."
 
 
-    message_lines = ["Here are the EC2 instances I found:"]
-    for i_id, i_type, i_state, i_launch in instances:
-        message_lines.append(f"- Instance ID: {i_id}, Type: {i_type}, State: {i_state}, Launched at: {i_launch}")
+        message_lines = ["Here are the EC2 instances I found:"]
+        for i_id, i_type, i_state, i_launch in instances:
+            message_lines.append(f"- Instance ID: {i_id}, Type: {i_type}, State: {i_state}, Launched at: {i_launch}")
 
-    return "\n".join(message_lines)
+        return "\n".join(message_lines)
 
     except ClientError as e:
         return f"Failed to describe EC2 instances: {e.response['Error']['Message']}"
