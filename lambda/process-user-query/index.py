@@ -1,34 +1,17 @@
 import boto3
 import json
+import ast
 from aws_handlers import dispatcher
 
 bedrock_runtime = boto3.client("bedrock-runtime")
-regional_services = {'EC2', 'RDS', 'Lambda'}
-
-
-intent_name = None
-slots = None
-service_slot = None
-region_slot = None
-service_original = None
-service_resolved = None
-original_query = set()
-
 
 def lambda_handler(event, context):
-    global intent_name, slots, service_slot, region_slot, service_original, service_resolved, original_query
     print("Lex event:", event)
 
-    intent_name = event['sessionState']['intent']['name']
-    slots = event['sessionState']['intent']['slots']
     invocation_source = event.get('invocationSource')
-    original_query.add(event.get('inputTranscript'))
-    service_slot = get_slot_value(slots.get('Service'))
-    region_slot = get_slot_value(slots.get('Region'))
-    user_query = event.get('inputTranscript', '')
 
     if invocation_source == 'DialogCodeHook':
-        return handle_slot_validation(service_slot, region_slot)
+        return handle_slot_validation(event)
     
     elif invocation_source == 'FulfillmentCodeHook':
         return handle_fulfillment(event)
@@ -48,13 +31,15 @@ def extract_query_with_bedrock(user_query):
     prompt = f"""Human: Extract AWS service query information from this text: "{user_query}"
     Return a JSON object with these fields:
     - service: The AWS service being queried (e.g. Lambda, EC2, S3, DynamoDB, RDS)
-    - action: The action to perform (count, list, describe, status, size, invoke, metrics, logs, versions)
+    - action: The action to perform (count, list, describe, status, size, invoke, metrics, logs, versions, list_s3_object, unsupported)
     - resource: Specific resource name if mentioned (e.g. bucket name, function name)
     - filters: Any filters mentioned (region, status, name, type, instance_type, availability_zone)
     - limit: Any limit on results (number)
     - payload: Any data to be passed to the resource (for invoke actions)
 
     Only include fields that are relevent to the query.
+    Make sure the 'action' to be in lowercase and matches any of the action examples provided.
+    Return 'unsupported' when not able to classify the action.
 
     Assistant: """
 
@@ -84,36 +69,81 @@ def extract_query_with_bedrock(user_query):
         return {}
 
 def handle_fulfillment(event):
+    slots = event['sessionState']['intent']['slots']
     user_query = event['sessionState']['sessionAttributes']['originalQuery']
     response = extract_query_with_bedrock(user_query)
     print("Response from bedrock: ", response)
-    service_handler_response = dispatcher.dispatch_service_response(response)
-    print(service_handler_response)
-    return {
-        "sessionState": {
-            "dialogAction": {
-                "type": "Close",
-                "fulfillmentState": "Fulfilled"
+    if response:
+        action = response.get('action')
+        service = response.get('service')
+        if action is 'unsupported':
+            return {
+                "sessionState": {
+                    "dialogAction": {
+                        "type": "Close",
+                        "fulfillmentState": "Fulfilled"
+                    },
+                    "intent": {
+                        "name": event['sessionState']['intent']['name'],
+                        "slots": slots,
+                        "state": "Fulfilled"
+                    }
+                },
+                "messages": [
+                    {
+                        "contentType": "PlainText",
+                        "content": "Your request for {service} is not supported. Please contact support"
+                    }
+                ]
+            }
+        service_handler_response = dispatcher.dispatch_service_response(response)
+        print(service_handler_response)
+        return {
+            "sessionState": {
+                "dialogAction": {
+                    "type": "Close",
+                    "fulfillmentState": "Fulfilled"
+                },
+                "intent": {
+                    "name": event['sessionState']['intent']['name'],
+                    "slots": slots,
+                    "state": "Fulfilled"
+                }
             },
-            "intent": {
-                "name": intent_name,
-                "slots": slots,
-                "state": "Fulfilled"
-            }
-        },
-        "messages": [
-            {
-                "contentType": "PlainText",
-                "content": "This will be your response from bedrock"
-            }
-        ]
-    }
+            "messages": [
+                {
+                    "contentType": "PlainText",
+                    "content": service_handler_response
+                }
+            ]
+        }
+    else:
+        print("Unhandled error from bedrock")
+        return {
+            "sessionState": {
+                "dialogAction": {
+                    "type": "Close",
+                    "fulfillmentState": "Fulfilled"
+                },
+                "intent": {
+                    "name": event['sessionState']['intent']['name'],
+                    "slots": slots,
+                    "state": "Fulfilled"
+                }
+            },
+            "messages": [
+                {
+                    "contentType": "PlainText",
+                    "content": "Your request cannot be handled at this time. Please contact support team."
+                }
+            ]
+        }
+
 
 def classify_service_with_bedrock(user_input):
-    prompt = f"""
-    User asked: "{user_input}"
+    prompt = f"""Human: "{user_input}"
     What AWS service is the user referring to? Reply with the service name like EC2, S3, RDS, Lambda, etc.
-    """
+    Assistant: """
 
     response = bedrock_runtime.invoke_model(
         modelId='anthropic.claude-v2',
@@ -132,13 +162,28 @@ def classify_service_with_bedrock(user_input):
     return text.upper()    
 
 def handle_slot_validation(event):
-    # Service mentioned but not resolved by Lex
-    # Fallback to Bedrock classification if Lex fails to resolve service
-    global original_query
+    regional_services = {'EC2', 'RDS', 'Lambda'}
+    slots = event['sessionState']['intent']['slots']
+    service_slot = get_slot_value(slots.get('Service'))
+    region_slot = get_slot_value(slots.get('Region'))
+
+    # This is to maintain user transcript from the previous communications
+    user_query = event.get('inputTranscript', '')
+    unique_transcript = set()
+    # Fetch the messages if there are previous communications stored in session state
+    if event['sessionState'] and event['sessionState']['sessionAttributes']:
+        original_query = ast.literal_eval(event['sessionState']['sessionAttributes']['originalQuery'])
+        if original_query:
+            unique_transcript.update(original_query)
+    # Append the current session transcript to previous session transcript
+    unique_transcript.add(user_query)
+
+    # If Amazon Lex resolved the AWS Service
     if service_slot:
         service_resolved = service_slot.get('resolvedValues', [])
 
-   if not service_slot or not service_resolved:
+    # If Amazon Lex has not resolved the AWS Service, invoke Bedrock
+    if not service_slot or not service_resolved:
         interpreted_service = classify_service_with_bedrock(user_query)
         if interpreted_service:
             slots["Service"] = {
@@ -148,15 +193,9 @@ def handle_slot_validation(event):
                     "resolvedValues": [interpreted_service]
                 }
             }
-            service_slot = interpreted_service
+            service_slot = slots["Service"]
 
-    service_original = service_slot.get('originalValue')
-    service_resolved = service_slot.get('resolvedValues', [])
-
-    # List of regional services
-    regional_services = {'EC2', 'RDS', 'S3', 'Lambda'}
-
-    # Determine if we need to ask for Region
+    # Determine if the interpreted service is regional or non-regional
     interpreted_service = get_slot_value(slots.get('Service')).get('interpretedValue')
     needs_region = interpreted_service in regional_services
 
@@ -165,14 +204,14 @@ def handle_slot_validation(event):
         return {
             "sessionState": {
                 "sessionAttributes": {
-                    "originalQuery": ' in '.join(original_query)
+                    "originalQuery": json.dumps(list(unique_transcript))
                 },
                 "dialogAction": {
                     "type": "ElicitSlot",
                     "slotToElicit": "Region"
                 },
                 "intent": {
-                    "name": intent_name,
+                    "name": event['sessionState']['intent']['name'],
                     "slots": slots,
                     "state": "InProgress"
                 }
@@ -189,13 +228,13 @@ def handle_slot_validation(event):
     return {
         "sessionState": {
             "sessionAttributes": {
-                "originalQuery": ' in '.join(original_query)
+                "originalQuery": json.dumps(list(unique_transcript))
             },
             "dialogAction": {
                 "type": "Delegate"
             },
             "intent": {
-                "name": intent_name,
+                "name": event['sessionState']['intent']['name'],
                 "slots": slots,
                 "state": "ReadyForFulfillment"
             }
