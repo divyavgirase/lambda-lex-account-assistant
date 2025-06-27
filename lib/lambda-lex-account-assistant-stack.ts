@@ -4,7 +4,6 @@ import * as path from 'path';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lex from 'aws-cdk-lib/aws-lex';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { custom_resources } from 'aws-cdk-lib';
 
 export class LambdaLexAccountAssistantStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {

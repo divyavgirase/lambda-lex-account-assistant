@@ -41,7 +41,8 @@ def extract_query_with_bedrock(user_query):
         locate,
         unsupported)
     - resource: Specific resource name if mentioned (e.g. bucket name, function name)
-    - filters: Any filters mentioned (region, status, name, type, instance_type, availability_zone)
+    - filters: Any filters mentioned (status, name, type, instance_type, availability_zone)
+    - region: Any region mentioned. Ensure to translate verbose region such as Ohio to region name us-east-2
     - limit: Any limit on results (number)
     - payload: Any data to be passed to the resource (for invoke actions)
 
