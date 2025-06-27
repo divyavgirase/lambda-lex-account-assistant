@@ -71,7 +71,7 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
               sampleUtterances: [
                 { utterance: 'How many {Service} do I have?' },
                 { utterance: 'List my {Service} in {Region}' },
-                { utterance: 'Check {Service} usage' },
+                { utterance: 'Invoke my {Service} with name in {Region}' },
               ],
               slots: [{
                 name: 'Service',
@@ -148,5 +148,66 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
       principal: new cdk.aws_iam.ServicePrincipal('lex.amazonaws.com'),
       sourceArn: alias.attrArn
     });
+
+    // IAM policy statement with fine-grained S3 permissions
+    const s3Policy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        's3:ListAllMyBuckets',
+        's3:ListBucket',
+        's3:ListObjectsV2',
+        's3:GetBucketLocation',
+        's3:HeadBucket'
+      ],
+      resources: [
+        'arn:aws:s3:::*',           // For bucket-level actions
+        'arn:aws:s3:::*/*'          // For object-level actions
+      ],
+    });
+    processUserQuery.role?.addToPrincipalPolicy(s3Policy);
+
+    // IAM policy statement with fine-grained Lambda permissions
+    const lambdaPolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'lambda:ListFunctions',
+        'lambda:InvokeFunction',
+        'lambda:GetFunctionConfiguration',
+        'lambda:GetPolicy',
+      ],
+      resources: ['*'],  //Required to perform operations on all functions
+    });
+    processUserQuery.role?.addToPrincipalPolicy(lambdaPolicy);
+
+    // IAM policy statement with fine-grained RDS permissions
+    const rdsPolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'rds:DescribeDBInstances'
+      ],
+      resources: ['*'],  
+    });
+    processUserQuery.role?.addToPrincipalPolicy(rdsPolicy);
+
+    // IAM policy statement with fine-grained EC2 permissions
+    const ec2Policy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'rds:DescribeInstances'
+      ],
+      resources: ['*'],  
+    });
+    processUserQuery.role?.addToPrincipalPolicy(ec2Policy);
+
+    // IAM policy statement with fine-grained Bedrock permissions
+    const bedrockPolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'bedrock:InvokeModel'
+      ],
+      resources: [`arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-v2`]
+    });
+    processUserQuery.role?.addToPrincipalPolicy(bedrockPolicy);
+    
   }
 }
