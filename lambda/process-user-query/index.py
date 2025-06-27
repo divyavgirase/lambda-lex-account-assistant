@@ -28,8 +28,8 @@ def lambda_handler(event, context):
 def extract_query_with_bedrock(user_query):
     prompt = f"""Human: Extract AWS service query information from this text: "{user_query}"
     Return a JSON object with these fields:
-    - service: The AWS service being queried (e.g. Lambda, EC2, S3, DynamoDB, RDS)
-    - action: The action to perform (
+    - service: The AWS service being queried. Respond with ONLY the service name from this list: (Lambda, EC2, S3, RDS)
+    - action: The action to perform. Respond with ONLY the action from this list(
         count, 
         list, 
         invoke, 
