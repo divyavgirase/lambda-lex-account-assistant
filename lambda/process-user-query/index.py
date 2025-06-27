@@ -153,7 +153,7 @@ def handle_fulfillment(event):
 
 def classify_service_with_bedrock(user_input):
     prompt = f"""Human: "{user_input}"
-    What AWS service is the user referring to? Reply with the service name like EC2, S3, RDS, Lambda, etc.
+    Identify the AWS service mentioned. Respond with ONLY the service name from this list: EC2, RDS, Lambda
     Assistant: """
 
     response = bedrock_runtime.invoke_model(
@@ -173,7 +173,7 @@ def classify_service_with_bedrock(user_input):
     return text.upper()    
 
 def handle_slot_validation(event):
-    regional_services = {'EC2', 'RDS', 'Lambda'}
+    regional_services = {'EC2', 'RDS', 'LAMBDA'}
     slots = event['sessionState']['intent']['slots']
     service_slot = get_slot_value(slots.get('Service'))
     region_slot = get_slot_value(slots.get('Region'))
@@ -197,6 +197,7 @@ def handle_slot_validation(event):
     if not service_slot or not service_resolved:
         interpreted_service = classify_service_with_bedrock(user_query)
         if interpreted_service:
+            interpreted_service = interpreted_service.upper() #Bedrock may mistakenly identify pattern out of services like S3, EC2 and return all upper case letters for services like Lambda
             slots["Service"] = {
                 "value": {
                     "originalValue": interpreted_service,
