@@ -1,58 +1,74 @@
 import boto3
+import json
 from botocore.exceptions import ClientError
 
-client = boto3.client('s3')
+s3_client = boto3.client('s3')
 
-def count_s3_buckets(response):
-    try:
-        buckets = client.list_buckets()
-        count = len(buckets.get('Buckets', []))
-        return f"You have {count} S3 bucket{'s' if count != 1 else ''} in your account."
-    except ClientError as e:
-        return f"Sorry, I couldn't retrieve your S3 bucket count. Reason: {str(e)}"
+def handle_s3_errors(func):
+    """Decorator to standardize S3 error handling."""
+    def wrapper(request):
+        try:
+            return func(request)
+        except ClientError as e:
+            err_code = e.response['Error'].get('Code', 'Unknown')
+            return f"Sorry, S3 operation '{func.__name__}' failed: {err_code}"
+        except Exception as e:
+            return f"An unexpected error occurred in '{func.__name__}': {e}"
+    return wrapper
 
-def list_s3_buckets(response):
-    try:
-        buckets = client.list_buckets()
-        bucket_names = [b['Name'] for b in buckets.get('Buckets', [])]
-        if not bucket_names:
-            return "You don't have any S3 buckets in your account."
-        return f"Here are your S3 buckets: {', '.join(bucket_names)}"
-    except ClientError as e:
-        return f"Sorry, I couldn't list your S3 buckets. Reason: {str(e)}"
-
-def list_objects_in_bucket(response):
-    bucket = response.get("resource")
+def validate_bucket_name(bucket):
     if not bucket:
-        return "Please provide a bucket name to list its objects."
+        return "Please provide a bucket name."
+    return None
+
+@handle_s3_errors
+def count_s3_buckets(request):
+    response = s3_client.list_buckets()
+    count = len(response.get('Buckets', []))
+    plural = 's' if count != 1 else ''
+    return f"You have {count} S3 bucket{plural} in your account."
+
+def list_s3_buckets(request):
+    response = s3_client.list_buckets()
+    names = [b['Name'] for b in response.get('Buckets', [])]
+    if not names:
+        return "You don't have any S3 buckets."
+    return f"Your buckets: {', '.join(names)}."
+
+@handle_s3_errors
+def list_objects_in_bucket(request):
+    bucket = request.get('resource')
+    err = validate_bucket_name(bucket)
+    if err:
+        return err
+
+    resp = s3_client.list_objects_v2(Bucket=bucket)
+    keys = [obj['Key'] for obj in resp.get('Contents', [])]
+    if not keys:
+        return f"The bucket '{bucket}' is empty."
+    return f"Objects in '{bucket}': {', '.join(keys)}."
+
+
+@handle_s3_errors
+def get_bucket_location(request):
+    bucket = request.get('resource')
+    err = validate_bucket_name(bucket)
+    if err:
+        return err
+
+    resp = s3_client.get_bucket_location(Bucket=bucket)
+    region = resp.get('LocationConstraint') or 'us-east-1'
+    return f"The bucket '{bucket}' is in region '{region}'."
+
+@handle_s3_errors
+def bucket_exists(request):
+    bucket = request.get('resource')
+    err = validate_bucket_name(bucket)
+    if err:
+        return err
 
     try:
-        objects = client.list_objects_v2(Bucket=bucket)
-        object_list = [obj["Key"] for obj in objects.get("Contents", [])]
-        if not object_list:
-            return f"The bucket '{bucket}' is empty."
-        return f"The bucket '{bucket}' contains the following objects: {', '.join(object_list)}"
-    except ClientError as e:
-        return f"Sorry, I couldn't list objects in the bucket '{bucket}'. Reason: {str(e)}"
-
-def get_bucket_location(response):
-    bucket = response.get("resource")
-    if not bucket:
-        return "Please specify a bucket name to find its region."
-
-    try:
-        loc = client.get_bucket_location(Bucket=bucket)
-        region = loc.get('LocationConstraint') or 'us-east-1'
-        return f"The bucket '{bucket}' is located in the '{region}' region."
-    except ClientError as e:
-        return f"Sorry, I couldn't get the location of the bucket '{bucket}'. Reason: {str(e)}"
-
-def bucket_exists(response):
-    bucket = response.get("resource")
-    if not bucket:
-        return "Please specify a bucket name to check."
-    try:
-        client.head_bucket(Bucket=bucket)
-        return f"Yes, the bucket '{bucket}' exists in your account."
+        s3_client.head_bucket(Bucket=bucket)
+        return f"Yes, the bucket '{bucket}' exists."
     except ClientError:
-        return f"No, the bucket '{bucket}' does not exist or you don't have access to it."
+        return f"No, the bucket '{bucket}' does not exist or is inaccessible."

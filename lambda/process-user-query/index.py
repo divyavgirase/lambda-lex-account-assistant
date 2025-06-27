@@ -7,9 +7,7 @@ bedrock_runtime = boto3.client("bedrock-runtime")
 
 def lambda_handler(event, context):
     print("Lex event:", event)
-
     invocation_source = event.get('invocationSource')
-
     if invocation_source == 'DialogCodeHook':
         return handle_slot_validation(event)
     
@@ -31,7 +29,17 @@ def extract_query_with_bedrock(user_query):
     prompt = f"""Human: Extract AWS service query information from this text: "{user_query}"
     Return a JSON object with these fields:
     - service: The AWS service being queried (e.g. Lambda, EC2, S3, DynamoDB, RDS)
-    - action: The action to perform (count, list, describe, status, size, invoke, metrics, logs, versions, list_s3_object, unsupported)
+    - action: The action to perform (
+        count, 
+        list, 
+        invoke, 
+        describe, 
+        resource_policy,
+        list_by_state, 
+        list_s3_object,
+        exists,
+        locate,
+        unsupported)
     - resource: Specific resource name if mentioned (e.g. bucket name, function name)
     - filters: Any filters mentioned (region, status, name, type, instance_type, availability_zone)
     - limit: Any limit on results (number)
@@ -65,7 +73,6 @@ def extract_query_with_bedrock(user_query):
             return json.loads(json_str)
         return {}
     except Exception as e:
-        print(e)
         return {}
 
 def handle_fulfillment(event):
@@ -76,9 +83,10 @@ def handle_fulfillment(event):
     if response:
         action = response.get('action')
         service = response.get('service')
-        if action is 'unsupported':
+        if action == 'unsupported':
             return {
                 "sessionState": {
+                    "sessionAttributes": {},
                     "dialogAction": {
                         "type": "Close",
                         "fulfillmentState": "Fulfilled"
@@ -100,6 +108,7 @@ def handle_fulfillment(event):
         print(service_handler_response)
         return {
             "sessionState": {
+                "sessionAttributes": {},
                 "dialogAction": {
                     "type": "Close",
                     "fulfillmentState": "Fulfilled"
@@ -121,6 +130,7 @@ def handle_fulfillment(event):
         print("Unhandled error from bedrock")
         return {
             "sessionState": {
+                "sessionAttributes": {},
                 "dialogAction": {
                     "type": "Close",
                     "fulfillmentState": "Fulfilled"
