@@ -193,7 +193,7 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     const ec2Policy = new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: [
-        'rds:DescribeInstances'
+        'ec2:DescribeInstances'
       ],
       resources: ['*'],  
     });
