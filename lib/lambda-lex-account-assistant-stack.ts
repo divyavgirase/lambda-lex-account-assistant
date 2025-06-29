@@ -90,7 +90,7 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
                 { utterance: 'Get details of {Service} in {Region}' },
                 { utterance: 'Get resource policy of {Service} in {Region}' },
                 { utterance: 'Get policy of {Service} in {Region}' },
-                { utterance: 'What is the setup of {Service}?' }
+                { utterance: 'What is the setup of {Service}' }
               ],
               slots: [{
                 name: 'Service',
