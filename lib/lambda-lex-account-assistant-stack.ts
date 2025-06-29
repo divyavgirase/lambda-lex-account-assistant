@@ -13,7 +13,7 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     const processUserQuery = new lambda.Function(this, 'ProcessUserQueryLambda', {
       runtime: lambda.Runtime.PYTHON_3_13,
       handler: 'index.lambda_handler',
-      timeout: cdk.Duration.seconds(300),
+      timeout: cdk.Duration.seconds(120),
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/process-user-query')),
       environment: {
         'MODEL_ID': 'anthropic.claude-v2'
@@ -23,7 +23,7 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     const lexBotRole = new iam.Role(this, 'LexBotServiceRole', {
       assumedBy: new iam.ServicePrincipal('lex.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonLexFullAccess'), // Update this after completion to restrict access
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonLexRunBotsOnly'),
       ],
     });
 
