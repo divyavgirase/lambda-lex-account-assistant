@@ -22,7 +22,7 @@ def dispatch_service_response(response):
             'describe': ec2.get_ec2_instance_details,
             'list_by_state': ec2.list_ec2_instances_by_state
         },
-        'Lambda ': {
+        'Lambda': {
             'count': lambda_service.count_lambda_functions,
             'list': lambda_service.list_lambda_functions,
             'invoke': lambda_service.invoke_lambda_function,

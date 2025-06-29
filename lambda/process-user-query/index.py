@@ -175,7 +175,7 @@ def classify_service_with_bedrock(user_input):
     return text
 
 def handle_slot_validation(event):
-    regional_services = {'EC2', 'RDS', 'LAMBDA'}
+    regional_services = {'EC2', 'RDS', 'Lambda'}
     slots = event['sessionState']['intent']['slots']
     service_slot = get_slot_value(slots.get('Service'))
     region_slot = get_slot_value(slots.get('Region'))
