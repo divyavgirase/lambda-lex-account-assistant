@@ -40,7 +40,8 @@ def list_lambda_functions(request):
     function_names = [f['FunctionName'] for f in result.get('Functions', [])]
     if not function_names:
         return f"You have no Lambda functions in the region {region}"
-    return f"Here are your Lambda functions: {', '.join(function_names)} in region {region}"
+    functions_list = '\n'.join(function_names)
+    return f"Here are your Lambda functions:\n{functions_list}\nIn region {region}"
 
 @handle_lambda_errors
 def invoke_lambda_function(request):
@@ -70,18 +71,7 @@ def get_lambda_configuration(request):
         return error
     client = get_lambda_client(region)
     config = client.get_function_configuration(FunctionName=function_name)
-    summary = {
-        'FunctionName': config.get('FunctionName'),
-        'FunctionArn': config.get('FunctionArn'),
-        'Runtime': config.get('Runtime'),
-        'Handler': config.get('Handler'),
-        'CodeSize': config.get('CodeSize'),
-        'MemorySize': config.get('MemorySize'),
-        'Timeout': config.get('Timeout'),
-        'LastModified': config.get('LastModified'),
-        'State': config.get('State'),
-        'Description': config.get('Description'),
-    }
+    response = "\n".join(f"{key}: {value}" for key, value in summary.items())
     return json.dumps(summary, default=str)
 
 @handle_lambda_errors
@@ -95,7 +85,5 @@ def get_lambda_policy(request):
     params = {'FunctionName': function_name}
     response = client.get_policy(**params)
     policy = response.get('Policy')
-    return json.dumps({
-        "FunctionName": function_name,
-        "Policy": json.loads(policy) if policy else {},
-    }, default=str)
+    pretty_policy = json.dumps(json.loads(policy), indent=2) if policy else "{}"
+    return f"FunctionName: {function_name}\nPolicy:\n{pretty_policy}"
