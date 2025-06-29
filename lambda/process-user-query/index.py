@@ -41,6 +41,7 @@ def extract_query_with_bedrock(user_query):
         list_s3_object,
         exists,
         locate,
+        function_configuration,
         unsupported)
     - resource: Specific resource name if mentioned (e.g. bucket name, function name)
     - filter: Any filter in JSON format from the list(status, state, type, instance_type, availability_zone). Region is not a filter and has a separate field.
@@ -103,7 +104,7 @@ def handle_fulfillment(event):
                 "messages": [
                     {
                         "contentType": "PlainText",
-                        "content": "Your request for {service} is not supported. Please contact support"
+                        "content": f"Your request for {service} is not supported. Please contact support"
                     }
                 ]
             }
@@ -171,7 +172,7 @@ def classify_service_with_bedrock(user_input):
 
     output = json.loads(response['body'].read())
     text = output.get("completion", "").strip()
-    return text.upper()    
+    return text
 
 def handle_slot_validation(event):
     regional_services = {'EC2', 'RDS', 'LAMBDA'}
@@ -201,7 +202,7 @@ def handle_slot_validation(event):
     if not service_slot or not service_resolved:
         interpreted_service = classify_service_with_bedrock(user_query)
         if interpreted_service:
-            interpreted_service = interpreted_service.upper() #Bedrock may mistakenly identify pattern out of services like S3, EC2 and return all upper case letters for services like Lambda
+            interpreted_service = interpreted_service
             slots["Service"] = {
                 "value": {
                     "originalValue": interpreted_service,
