@@ -193,7 +193,7 @@ def handle_slot_validation(event):
     # If Amazon Lex resolved the AWS Service
     if service_slot:
         service_resolved = service_slot.get('resolvedValues', [])
-
+    interpreted_region = None
     if region_slot:
         interpreted_region = region_slot.get('resolvedValues', [])
 
