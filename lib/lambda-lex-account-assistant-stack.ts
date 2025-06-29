@@ -145,6 +145,20 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
                 enabled: true,
               },
               parentIntentSignature: "AMAZON.FallbackIntent",
+              intentClosingSetting: {
+                closingResponse: {
+                    messageGroupsList: [
+                    {
+                       message: {
+                        plainTextMessage: {
+                          value: "Sorry, I didn't understand that. Could you rephrase your question?",
+                        }
+                       }
+                    }
+                  ],
+                allowInterrupt: true,
+                }
+              }
             },
           ],
         },
