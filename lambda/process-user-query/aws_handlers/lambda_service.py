@@ -97,7 +97,5 @@ def get_lambda_policy(request):
     policy = response.get('Policy')
     return json.dumps({
         "FunctionName": function_name,
-        "Qualifier": qualifier,
         "Policy": json.loads(policy) if policy else {},
-        "RevisionId": revision
     }, default=str)
