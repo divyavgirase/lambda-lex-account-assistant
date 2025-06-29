@@ -80,17 +80,21 @@ def get_ec2_instance_details(request):
 @handle_ec2_errors
 def list_ec2_instances_by_state(request):
     region = request.get('region', 'us-east-1')
-    state = request.get('state', 'running')  # e.g. 'running' or 'stopped'
-    client = get_ec2_client(region)
-    resp = client.describe_instances(
-        Filters=[{'Name': 'instance-state-name', 'Values': [state]}]
-    )  # :contentReference[oaicite:1]{index=1}
-    instances = [
-        inst
-        for res in resp.get('Reservations', [])
-        for inst in res.get('Instances', [])
-    ]
-    if not instances:
-        return f"No EC2 instances found in state '{state}' in region {region}."
-    ids = [inst['InstanceId'] for inst in instances]
-    return f"Instances in '{state}' state: {', '.join(ids)} in {region}"
+    filters = request.get('filter', {})
+    if filters:
+        state = filters.get('state') or filters.get('status', 'running')  # e.g. 'running' or 'stopped'
+        client = get_ec2_client(region)
+        resp = client.describe_instances(
+            Filters=[{'Name': 'instance-state-name', 'Values': [state]}]
+        )  # :contentReference[oaicite:1]{index=1}
+        instances = [
+            inst
+            for res in resp.get('Reservations', [])
+            for inst in res.get('Instances', [])
+        ]
+        if not instances:
+            return f"No EC2 instances found in state '{state}' in region {region}."
+        ids = [inst['InstanceId'] for inst in instances]
+        return f"Instances in '{state}' state: {', '.join(ids)} in {region}"
+    else:
+        return "Specify a state for EC2 instance and resend the request"

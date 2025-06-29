@@ -1,6 +1,7 @@
 import boto3
 import json
 import ast
+import os
 from aws_handlers import dispatcher
 
 bedrock_runtime = boto3.client("bedrock-runtime")
@@ -26,6 +27,7 @@ def lambda_handler(event, context):
         }
 
 def extract_query_with_bedrock(user_query):
+    example_prompt = {'service': 'EC2', 'action': 'list_by_state', 'region': 'us-east-1', 'filter': {'instance_type': 't2.micro', 'availability_zone': 'us-east-1a'}}
     prompt = f"""Human: Extract AWS service query information from this text: "{user_query}"
     Return a JSON object with these fields:
     - service: The AWS service being queried. Respond with ONLY the service name from this list: (Lambda, EC2, S3, RDS)
@@ -41,20 +43,20 @@ def extract_query_with_bedrock(user_query):
         locate,
         unsupported)
     - resource: Specific resource name if mentioned (e.g. bucket name, function name)
-    - filters: Any filters mentioned (status, type, instance_type, availability_zone). Region is not a filter and has a separate field.
+    - filter: Any filter in JSON format from the list(status, state, type, instance_type, availability_zone). Region is not a filter and has a separate field.
     - region: Any region mentioned. Ensure to translate verbose region such as Ohio to region name us-east-2
     - limit: Any limit on results (number)
     - payload: Any data to be passed to the resource (for invoke actions)
 
     Only include fields that are relevent to the query.
-    Make sure the 'action' to be in lowercase and matches any of the action examples provided.
+    Example format for reference {example_prompt}
     Return 'unsupported' when not able to classify the action.
 
     Assistant: """
 
     try:
         response = bedrock_runtime.invoke_model(
-            modelId="anthropic.claude-v2",
+            modelId=os.environ['MODEL_ID'],
             contentType="application/json",
             accept="application/json",
             body=json.dumps({
@@ -106,7 +108,6 @@ def handle_fulfillment(event):
                 ]
             }
         service_handler_response = dispatcher.dispatch_service_response(response)
-        print(service_handler_response)
         return {
             "sessionState": {
                 "sessionAttributes": {},
@@ -153,11 +154,11 @@ def handle_fulfillment(event):
 
 def classify_service_with_bedrock(user_input):
     prompt = f"""Human: "{user_input}"
-    Identify the AWS service mentioned. Respond with ONLY the service name from this list: EC2, RDS, Lambda
+    Identify the AWS service mentioned. Respond with ONLY the service name from this list: EC2, RDS, Lambda, S3
     Assistant: """
 
     response = bedrock_runtime.invoke_model(
-        modelId='anthropic.claude-v2',
+        modelId=os.environ['MODEL_ID'],
         contentType='application/json',
         accept='application/json',
         body=json.dumps({
@@ -193,6 +194,9 @@ def handle_slot_validation(event):
     if service_slot:
         service_resolved = service_slot.get('resolvedValues', [])
 
+    if region_slot:
+        interpreted_region = region_slot.get('resolvedValues', [])
+
     # If Amazon Lex has not resolved the AWS Service, invoke Bedrock
     if not service_slot or not service_resolved:
         interpreted_service = classify_service_with_bedrock(user_query)
@@ -212,7 +216,7 @@ def handle_slot_validation(event):
     needs_region = interpreted_service in regional_services
 
     # If region is required but not provided
-    if needs_region and not region_slot:
+    if needs_region and not interpreted_region:
         return {
             "sessionState": {
                 "sessionAttributes": {
