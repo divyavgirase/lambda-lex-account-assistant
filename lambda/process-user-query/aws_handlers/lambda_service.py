@@ -40,7 +40,7 @@ def list_lambda_functions(request):
     function_names = [f['FunctionName'] for f in result.get('Functions', [])]
     if not function_names:
         return f"You have no Lambda functions in the region {region}"
-    functions_list = '\n'.join(function_names)
+    functions_list = ',\n'.join(function_names)
     return f"Here are your Lambda functions:\n{functions_list}\nIn region {region}"
 
 @handle_lambda_errors
@@ -71,8 +71,23 @@ def get_lambda_configuration(request):
         return error
     client = get_lambda_client(region)
     config = client.get_function_configuration(FunctionName=function_name)
-    response = "\n".join(f"{key}: {value}" for key, value in summary.items())
-    return json.dumps(summary, default=str)
+    summary = {
+        'FunctionName': config['FunctionName'],
+        'Runtime': config['Runtime'],
+        'Handler': config['Handler'],
+        'Role': config['Role'],
+        'Timeout': config['Timeout'],
+        'MemorySize': config['MemorySize'],
+        'KMSKeyArn': config.get('KMSKeyArn', None),
+        'VpcId': config['VpcConfig'].get('VpcId'),
+        'Subnets': config['VpcConfig'].get('SubnetIds'),
+        'SecurityGroups': config['VpcConfig'].get('SecurityGroupIds'),
+        'State': config.get('State'),
+        'LastModified': config['LastModified'],
+        'LogGroup': config.get('LoggingConfig', {}).get('LogGroup'),
+    }
+
+    return json.dumps(summary, indent=2, default=str)
 
 @handle_lambda_errors
 def get_lambda_policy(request):

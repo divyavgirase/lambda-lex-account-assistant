@@ -239,3 +239,4 @@ To remove all resources created:
 ```bash
 cdk destroy
 ```
+Note - If you have followed the optional steps of integrating Slack channel, delete the channel integration manually from console before cleaning up the CDK resources.

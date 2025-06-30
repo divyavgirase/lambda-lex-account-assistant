@@ -1,29 +1,31 @@
-import * as cdk from 'aws-cdk-lib';
+import { Stack, StackProps, Duration, aws_iam } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import * as path from 'path';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as lex from 'aws-cdk-lib/aws-lex';
-import * as iam from 'aws-cdk-lib/aws-iam';
+import path from 'path';
+import { Function, Runtime, Code, LoggingFormat, } from 'aws-cdk-lib/aws-lambda';
+import { CfnBot, CfnBotVersion, CfnBotAlias } from 'aws-cdk-lib/aws-lex';
+import { Role, ServicePrincipal, ManagedPolicy, PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
+import { Key } from 'aws-cdk-lib/aws-kms';
 
-export class LambdaLexAccountAssistantStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+export class LambdaLexAccountAssistantStack extends Stack {
+  constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props);
 
     // Lambda function for processing Lex queries
-    const processUserQuery = new lambda.Function(this, 'ProcessUserQueryLambda', {
-      runtime: lambda.Runtime.PYTHON_3_13,
+    const processUserQuery = new Function(this, 'ProcessUserQueryLambda', {
+      runtime: Runtime.PYTHON_3_13,
       handler: 'index.lambda_handler',
-      timeout: cdk.Duration.seconds(120),
-      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/process-user-query')),
+      timeout: Duration.seconds(120),
+      code: Code.fromAsset(path.join(__dirname, '../lambda/process-user-query')),
       environment: {
         'MODEL_ID': 'anthropic.claude-v2'
-      }
+      },
+      loggingFormat: LoggingFormat.JSON
     });
     // IAM Role for Lex bot
-    const lexBotRole = new iam.Role(this, 'LexBotServiceRole', {
-      assumedBy: new iam.ServicePrincipal('lex.amazonaws.com'),
+    const lexBotRole = new Role(this, 'LexBotServiceRole', {
+      assumedBy: new ServicePrincipal('lex.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonLexRunBotsOnly'),
+        ManagedPolicy.fromAwsManagedPolicyName('AmazonLexRunBotsOnly'),
       ],
     });
 
@@ -31,7 +33,7 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     processUserQuery.grantInvoke(lexBotRole);
 
     // Define the Lex bot
-    const bot = new lex.CfnBot(this, 'AWSAccountInsightsBot', {
+    const bot = new CfnBot(this, 'AWSAccountInsightsBot', {
       name: 'AWSAccountInsightsBot',
       roleArn: lexBotRole.roleArn,
       dataPrivacy: {
@@ -168,7 +170,7 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     const timestamp = Date.now().toString();
 
     //Lex Bot Version
-    const botVersion = new lex.CfnBotVersion(this, `AWSAccountInsightsBotVersion-${timestamp}`, {
+    const botVersion = new CfnBotVersion(this, `AWSAccountInsightsBotVersion-${timestamp}`, {
       botId: bot.attrId,
       botVersionLocaleSpecification: [
         {
@@ -181,7 +183,7 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     });
 
     // Lex Bot Alias
-    const alias = new lex.CfnBotAlias(this, 'AWSAccountInsightsBotAlias', {
+    const alias = new CfnBotAlias(this, 'AWSAccountInsightsBotAlias', {
       botId: bot.attrId,
       botAliasName: 'Prod',
       botVersion: botVersion.attrBotVersion,
@@ -201,13 +203,13 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
 
     // Allow Lex to invoke Lambda via alias
     processUserQuery.addPermission('AllowLexInvoke', {
-      principal: new cdk.aws_iam.ServicePrincipal('lex.amazonaws.com'),
+      principal: new aws_iam.ServicePrincipal('lex.amazonaws.com'),
       sourceArn: alias.attrArn
     });
 
     // IAM policy statement with fine-grained S3 permissions
-    const s3Policy = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
+    const s3Policy = new PolicyStatement({
+      effect: Effect.ALLOW,
       actions: [
         's3:ListAllMyBuckets',
         's3:ListBucket',
@@ -223,8 +225,8 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     processUserQuery.role?.addToPrincipalPolicy(s3Policy);
 
     // IAM policy statement with fine-grained Lambda permissions
-    const lambdaPolicy = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
+    const lambdaPolicy = new PolicyStatement({
+      effect: Effect.ALLOW,
       actions: [
         'lambda:ListFunctions',
         'lambda:InvokeFunction',
@@ -236,8 +238,8 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     processUserQuery.role?.addToPrincipalPolicy(lambdaPolicy);
 
     // IAM policy statement with fine-grained RDS permissions
-    const rdsPolicy = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
+    const rdsPolicy = new PolicyStatement({
+      effect: Effect.ALLOW,
       actions: [
         'rds:DescribeDBInstances'
       ],
@@ -246,8 +248,8 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     processUserQuery.role?.addToPrincipalPolicy(rdsPolicy);
 
     // IAM policy statement with fine-grained EC2 permissions
-    const ec2Policy = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
+    const ec2Policy = new PolicyStatement({
+      effect: Effect.ALLOW,
       actions: [
         'ec2:DescribeInstances'
       ],
@@ -256,13 +258,20 @@ export class LambdaLexAccountAssistantStack extends cdk.Stack {
     processUserQuery.role?.addToPrincipalPolicy(ec2Policy);
 
     // IAM policy statement with fine-grained Bedrock permissions
-    const bedrockPolicy = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
+    const bedrockPolicy = new PolicyStatement({
+      effect: Effect.ALLOW,
       actions: [
         'bedrock:InvokeModel'
       ],
       resources: [`arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-v2`]
     });
     processUserQuery.role?.addToPrincipalPolicy(bedrockPolicy);
+
+    // KMS key for the optional step of channel integration in Amazon Lex
+    new Key(this, 'LexKmsKey', {
+      enableKeyRotation: true,
+      alias: 'alias/lex-key',
+      description: 'KMS Key for encrypting Amazon Lex channel configuration information',
+    });
   }
 }

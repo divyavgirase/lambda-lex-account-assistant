@@ -3,11 +3,14 @@ import json
 import ast
 import os
 from aws_handlers import dispatcher
+import logging
 
+logger = logging.getLogger()
+logger.setLevel("INFO")
 bedrock_runtime = boto3.client("bedrock-runtime")
 
 def lambda_handler(event, context):
-    print("Lex event:", event)
+    logger.info(f"Event from Lex: {event}")
     invocation_source = event.get('invocationSource')
     if invocation_source == 'DialogCodeHook':
         return handle_slot_validation(event)
@@ -81,9 +84,12 @@ def extract_query_with_bedrock(user_query):
 
 def handle_fulfillment(event):
     slots = event['sessionState']['intent']['slots']
-    user_query = event['sessionState']['sessionAttributes']['originalQuery']
+    try:
+        user_query = event['sessionState']['sessionAttributes']['originalQuery']
+    except Exception as e:
+        user_query = event['inputTranscript']
     response = extract_query_with_bedrock(user_query)
-    print("Response from bedrock: ", response)
+    logger.info(f"Response from bedrock: {response}")
     if response:
         action = response.get('action')
         service = response.get('service')
@@ -130,7 +136,6 @@ def handle_fulfillment(event):
             ]
         }
     else:
-        print("Unhandled error from bedrock")
         return {
             "sessionState": {
                 "sessionAttributes": {},
