@@ -1,6 +1,6 @@
 import { Stack, StackProps, Duration, aws_iam } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import path from 'path';
+import * as path from 'path';
 import { Function, Runtime, Code, LoggingFormat, } from 'aws-cdk-lib/aws-lambda';
 import { CfnBot, CfnBotVersion, CfnBotAlias } from 'aws-cdk-lib/aws-lex';
 import { Role, ServicePrincipal, ManagedPolicy, PolicyStatement, Effect } from 'aws-cdk-lib/aws-iam';
